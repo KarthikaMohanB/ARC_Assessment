@@ -1,0 +1,133 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c90dc8c7-dcc6-49dd-9ca2-423079092d22",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import requests\n",
+    "import pandas as pd\n",
+    "import time"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b6a8d717-2c55-4159-8d2f-42e4b1f31c5b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#Keys\n",
+    "API_KEY = \"AIzaSyDFQ350Si7NLLo_kYZTDKMza_YVatAK7VA\"\n",
+    "CHANNEL_ID = \"\"UCAuUUnT6oDeKwE6v1NGQxug\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a2aa5ec8-c3bc-4cf4-8b9c-dfd70f6b64ea",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get_video_details(video_id):\n",
+    "\n",
+    "    #collecting view, like, dislike, comment counts\n",
+    "    url_video_stats = \"https://www.googleapis.com/youtube/v3/videos?id=\"+video_id+\"&part=statistics&key=\"+API_KEY\n",
+    "    response_video_stats = requests.get(url_video_stats).json()\n",
+    "\n",
+    "    view_count = response_video_stats['items'][0]['statistics']['viewCount']\n",
+    "    like_count = response_video_stats['items'][0]['statistics']['likeCount']\n",
+    "    dislike_count = response_video_stats['items'][0]['statistics']['dislikeCount']\n",
+    "    comment_count = response_video_stats['items'][0]['statistics']['commentCount']\n",
+    "\n",
+    "    return view_count, like_count, dislike_count, comment_count"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "465e3758-bb28-4402-8360-3c27696fa8c1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def get_videos(df):\n",
+    "    pageToken = \"\"\n",
+    "    while 1:\n",
+    "        url = \"https://www.googleapis.com/youtube/v3/search?key=\"+API_KEY+\"&channelId=\"+CHANNEL_ID+\"&part=snippet,id&order=date&maxResults=10000&\"+pageToken\n",
+    "\n",
+    "        response = requests.get(url).json()\n",
+    "        time.sleep(1) #give it a second before starting the for loop\n",
+    "        for video in response['items']:\n",
+    "            if video['id']['kind'] == \"youtube#video\":\n",
+    "                video_id = video['id']['videoId']\n",
+    "                video_title = video['snippet']['title']\n",
+    "                video_title = str(video_title).replace(\"&amp;\",\"\")\n",
+    "                upload_date = video['snippet']['publishedAt']\n",
+    "                upload_date = str(upload_date).split(\"T\")[0]\n",
+    "                view_count, like_count, dislike_count, comment_count = get_video_details(video_id)\n",
+    "\n",
+    "                df = df.append({'video_id':video_id,'video_title':video_title,\n",
+    "                                \"upload_date\":upload_date,\"view_count\":view_count,\n",
+    "                                \"like_count\":like_count,\"dislike_count\":dislike_count,\n",
+    "                                \"comment_count\":comment_count},ignore_index=True)\n",
+    "        try:\n",
+    "            if response['nextPageToken'] != None: #if none, it means it reached the last page and break out of it\n",
+    "                pageToken = \"pageToken=\" + response['nextPageToken']\n",
+    "\n",
+    "        except:\n",
+    "            break\n",
+    "\n",
+    "\n",
+    "    return df"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "85b2404e-d6a2-42f4-b4fd-78573e52ceef",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#main\n",
+    "\n",
+    "#build our dataframe\n",
+    "df2 = pd.DataFrame(columns=[\"video_id\",\"video_title\",\"upload_date\",\"view_count\",\"like_count\",\"dislike_count\",\"comment_count\"]) \n",
+    "\n",
+    "df2 = get_videos(df2)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f2850ebb-3f43-4568-921f-7455f3b79e7d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df2"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "de03948f-8afc-4a3f-a933-d619a448f0bf",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df2.to_csv('youtube_vids_2nd_pull.csv')"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "",
+   "name": ""
+  },
+  "language_info": {
+   "name": ""
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

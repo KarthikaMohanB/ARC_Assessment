@@ -1,0 +1,198 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4c348426-cf88-4ba9-a2bc-1b57b4dbd531",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "!pip install psycopg2\n",
+    "import psycopg2 as ps\n",
+    "import pandas as pd"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "06fcc16b-a644-4502-b745-5f52cc5891ca",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df = pd.read_csv('youtube_vids_1st_pull.csv', index_col=0) \n",
+    "df.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "9a3d1991-d6fb-454f-bdc2-da3bface196b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def connect_to_db(host_name, dbname, port, username, password):\n",
+    "    try:\n",
+    "        conn = ps.connect(host=host_name, database=dbname, user=username, password=password, port=port)\n",
+    "\n",
+    "    except ps.OperationalError as e:\n",
+    "        raise e\n",
+    "    else:\n",
+    "        print('Connected!')\n",
+    "        return conn\n",
+    "\n",
+    "def create_table(curr):\n",
+    "    create_table_command = (\"\"\"CREATE TABLE IF NOT EXISTS videos (\n",
+    "                    video_id VARCHAR(255) PRIMARY KEY,\n",
+    "                    video_title TEXT NOT NULL,\n",
+    "                    upload_date DATE NOT NULL DEFAULT CURRENT_DATE,\n",
+    "                    view_count INTEGER NOT NULL,\n",
+    "                    like_count INTEGER NOT NULL,\n",
+    "                    dislike_count INTEGER NOT NULL,\n",
+    "                    comment_count INTEGER NOT NULL\n",
+    "            )\"\"\")\n",
+    "\n",
+    "    curr.execute(create_table_command)\n",
+    "\n",
+    "def insert_into_table(curr, video_id, video_title, upload_date, view_count, like_count, dislike_count, comment_count):\n",
+    "    insert_into_videos = (\"\"\"INSERT INTO videos (video_id, video_title, upload_date,\n",
+    "                        view_count, like_count, dislike_count,comment_count)\n",
+    "    VALUES(%s,%s,%s,%s,%s,%s,%s);\"\"\")\n",
+    "    row_to_insert = (video_id, video_title, upload_date, view_count, like_count, dislike_count, comment_count)\n",
+    "    curr.execute(insert_into_videos, row_to_insert)\n",
+    "\n",
+    "\n",
+    "def update_row(curr, video_id, video_title, view_count, like_count, dislike_count, comment_count):\n",
+    "    query = (\"\"\"UPDATE videos\n",
+    "            SET video_title = %s,\n",
+    "                view_count = %s,\n",
+    "                like_count = %s,\n",
+    "                dislike_count = %s,\n",
+    "                comment_count = %s\n",
+    "            WHERE video_id = %s;\"\"\")\n",
+    "    vars_to_update = (video_title, view_count, like_count, dislike_count, comment_count, video_id)\n",
+    "    curr.execute(query, vars_to_update)\n",
+    "\n",
+    "\n",
+    "def check_if_video_exists(curr, video_id): \n",
+    "    query = (\"\"\"SELECT video_id FROM VIDEOS WHERE video_id = %s\"\"\")\n",
+    "\n",
+    "    curr.execute(query, (video_id,))\n",
+    "    return curr.fetchone() is not None\n",
+    "\n",
+    "\n",
+    "\n",
+    "def truncate_table(curr):\n",
+    "    truncate_table = (\"\"\"TRUNCATE TABLE videos\"\"\")\n",
+    "\n",
+    "    curr.execute(truncate_table)\n",
+    "\n",
+    "\n",
+    "def append_from_df_to_db(curr,df):\n",
+    "    for i, row in df.iterrows():\n",
+    "        insert_into_table(curr, row['video_id'], row['video_title'], row['upload_date'], row['view_count']\n",
+    "                          , row['like_count'], row['dislike_count'], row['comment_count'])\n",
+    "\n",
+    "\n",
+    "def update_db(curr,df):\n",
+    "    tmp_df = pd.DataFrame(columns=['video_id', 'video_title', 'upload_date', 'view_count',\n",
+    "                                   'like_count', 'dislike_count', 'comment_count'])\n",
+    "    for i, row in df.iterrows():\n",
+    "        if check_if_video_exists(curr, row['video_id']): # If video already exists then we will update\n",
+    "            update_row(curr,row['video_id'],row['video_title'],row['view_count'],row['like_count'],row['dislike_count'],row['comment_count'])\n",
+    "        else: # The video doesn't exists so we will add it to a temp df and append it using append_from_df_to_db\n",
+    "            tmp_df = tmp_df.append(row)\n",
+    "\n",
+    "    return tmp_df"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "02532a1c-6825-41c3-951d-e2fa5803098a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "host_name = 'xxxxxxxxx.rds.amazonaws.com'\n",
+    "dbname = 'xxxxx'\n",
+    "port = '5432'\n",
+    "username = 'xxxx' \n",
+    "password = 'xxxxxxx'\n",
+    "conn = None\n",
+    "\n",
+    "#establish a connection to db\n",
+    "conn = connect_to_db(host_name, dbname, port, username, password)\n",
+    "curr = conn.cursor()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fcd73caa-fa62-4774-9ee4-74d6c3c301b6",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "create_table(curr)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "491e136b-517d-49f3-a4ad-cfc130086c09",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#update data for existing videos\n",
+    "\n",
+    "new_vid_df = update_db(curr,df)\n",
+    "conn.commit()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "33c8890f-f9e9-43c2-8da6-86bf1062dd10",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#insert new videos into db table\n",
+    "\n",
+    "append_from_df_to_db(curr, new_vid_df)\n",
+    "conn.commit()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c1456d91-1eb6-4bfa-bec7-da3326b62aaf",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#view data in db table\n",
+    "\n",
+    "curr.execute(\"SELECT * FROM VIDEOS\")\n",
+    "print(curr.fetchall())"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.9.12"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
